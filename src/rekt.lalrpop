@@ -1,0 +1,213 @@
+use crate::ast::{Assign, Declaration, Expr, Opcode};
+
+grammar;
+
+Tier<Op, NextTier>: Box<Expr> = {
+    <Tier<Op,NextTier>> <Op> <NextTier> => Box::new(Expr::BinOp(<>)),
+    NextTier
+};
+
+RTLTier<Op, NextTier>: Box<Expr> = {
+    NextTier Op Tier<Op,NextTier> => Box::new(Expr::BinOp(<>)),
+    NextTier
+};
+
+UnaryTier<Op, NextTier>: Box<Expr> = {
+    Op NextTier => Box::new(Expr::UnOp(<>)),
+    NextTier
+};
+
+Comma<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T> => {
+        let mut v = v;
+        v.push(e);
+        v
+    }
+};
+
+pub Script: Vec<Box<Expr>> = {
+    <v:(<Stmt> ";")*> <e:Stmt> ";"? => {
+        let mut v = v;
+        v.push(e);
+        v
+    },
+};
+
+Stmt: Box<Expr> = {
+    DeclKw T1 => Box::new(Expr::Decl(<>)),
+    T1
+};
+
+// For tier reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence#Table
+
+T1: Box<Expr> = Comma<T2> => Box::new(Expr::Seq(<>));
+
+T2 = UnaryTier<YieldOp, T3>;
+
+T3 = RTLTier<AssignOp, T4>;
+
+T4: Box<Expr> = {
+   <i0:T5> "?" <i1:T5> ":" <i2:T5> => Box::new(Expr::Tern(<>)),
+    T5
+};
+
+T5 = Tier<OrOp, T6>;
+T6 = Tier<AndOp, T7>;
+T7 = Tier<BitOrOp, T8>;
+T8 = Tier<BitXorOp, T9>;
+T9 = Tier<BitAndOp, T10>;
+
+T10 = Tier<EqOp, T11>;
+T11 = Tier<CmpOp, T12>;
+
+T12 = Tier<ShiftOp, T13>;
+T13 = Tier<ExprOp, T14>;
+T14 = Tier<FactorOp, T15>;
+
+T15 = RTLTier<ExpOp, T16>;
+
+T16 = UnaryTier<ItemOp, T17>;
+
+T17: Box<Expr> = {
+    <t:T18> <o:PostOp> => Box::new(Expr::UnOp(o, t)),
+    T18
+};
+
+T18: Box<Expr> = {
+    "new" <i:IDENT> => Box::new(Expr::New(i.to_string(), vec![])),
+    T19
+};
+
+T19: Box<Expr> = {
+    <T19> "." <T20> => Box::new(Expr::Access(<>)),
+    <T19> "[" <T19> "]" => Box::new(Expr::Access(<>)),
+    "new" <i:IDENT> "(" <v:Comma<T20>> ")" => Box::new(Expr::New(i.to_string(), v)),
+    "new" <i:IDENT> "(" ")" => Box::new(Expr::New(i.to_string(), vec![])),
+    <T19> "(" <Comma<T20>> ")" => Box::new(Expr::Call(<>)),
+    T20
+};
+
+T20: Box<Expr> = {
+    "(" <T2> ")" => <>,
+    Term
+};
+
+DeclKw: Declaration = {
+    "var" => Declaration::Var,
+    "let" => Declaration::Let,
+    "const" => Declaration::Const,
+};
+
+YieldOp: Opcode = {
+    "yield" => Opcode::Yield(false),
+    "yield*" => Opcode::Yield(true),
+};
+
+AssignOp: Opcode = {
+    "=" => Opcode::Asn(Assign::Basic),
+    "+=" => Opcode::Asn(Assign::Add),
+    "-=" => Opcode::Asn(Assign::Sub),
+    "**=" => Opcode::Asn(Assign::Exp),
+    "*=" => Opcode::Asn(Assign::Mul),
+    "/=" => Opcode::Asn(Assign::Div),
+    "%=" => Opcode::Asn(Assign::Rem),
+    "<<=" => Opcode::Asn(Assign::Shl),
+    ">>=" => Opcode::Asn(Assign::Shr),
+    ">>>=" => Opcode::Asn(Assign::Ushr),
+    "&=" => Opcode::Asn(Assign::And),
+    "^=" => Opcode::Asn(Assign::Xor),
+    "|=" => Opcode::Asn(Assign::Or),
+}
+
+OrOp: Opcode = "||" => Opcode::Or;
+AndOp: Opcode = "&&" => Opcode::And;
+BitOrOp: Opcode = "|" => Opcode::BitOr;
+BitXorOp: Opcode = "^" => Opcode::BitXor;
+BitAndOp: Opcode = "&" => Opcode::BitAnd;
+
+EqOp: Opcode = {
+    "!==" => Opcode::Eq { strict: true, negated: true },
+    "===" => Opcode::Eq { strict: true, negated: false },
+    "!=" => Opcode::Eq { strict: false, negated: true },
+    "==" => Opcode::Eq { strict: false, negated: false },
+};
+
+CmpOp: Opcode = {
+    "<" => Opcode::Lt,
+    ">" => Opcode::Gt,
+    "<=" => Opcode::Lte,
+    ">=" => Opcode::Gte,
+    "in" => Opcode::In,
+    "instanceof" => Opcode::InstanceOf,
+};
+
+ShiftOp: Opcode = {
+    "<<" => Opcode::Shl,
+    ">>" => Opcode::Shr,
+    ">>>" => Opcode::Ushr,
+};
+
+ExprOp: Opcode = {
+    "+" => Opcode::Add,
+    "-" => Opcode::Sub,
+};
+
+FactorOp: Opcode = {
+    "*" => Opcode::Mul,
+    "/" => Opcode::Div,
+    "%" => Opcode::Rem,
+};
+
+ExpOp: Opcode = "**" => Opcode::Exp;
+
+ItemOp: Opcode = {
+    "!" => Opcode::Not,
+    "~" => Opcode::BitNot,
+    "+" => Opcode::Pos,
+    "-" => Opcode::Neg,
+    "++" => Opcode::Inc { post: false },
+    "--" => Opcode::Dec { post: false },
+    "typeof" => Opcode::TypeOf,
+    "void" => Opcode::Void,
+    "delete" => Opcode::Delete,
+    "await" => Opcode::Await,
+};
+
+PostOp: Opcode = {
+    "++" => Opcode::Inc { post: true },
+    "--" => Opcode::Dec { post: true },
+};
+
+Term: Box<Expr> = {
+    Ident,
+    BOOL => Box::new(Expr::Bool(<>.parse().unwrap())),
+    NUM => Box::new(Expr::Num(<>.parse().unwrap())),
+    STRING => Box::new(Expr::Str(<>.to_string())),
+};
+
+Ident: Box<Expr> = IDENT => Box::new(Expr::Ident(<>.to_string()));
+
+Comment: () = {
+    r"//.*" => (),
+    r"(?s)/\*.*\*/" => (),
+};
+
+match {
+    "var",
+    "let",
+    "const",
+    "new",
+    "typeof",
+    "void",
+    "delete",
+    "await",
+    "in",
+    "instanceof",
+    "yield",
+    r"(true|false)" => BOOL,
+} else {
+    r"([0-9]+[.])?[0-9]+" => NUM,
+    r"[A-Za-z]+[A-Za-z0-9_*]*" => IDENT,
+    r#"(?s)".*""# => STRING,
+    _
+}

@@ -1,0 +1,13 @@
+[package]
+name = "rektscript"
+version = "0.1.0"
+authors = ["George Kaplan <george.kaplan@visionistinc.com>"]
+edition = "2018"
+build = "build.rs"
+
+[dependencies]
+lalrpop-util = "0.16.3"
+regex = "0.2.0"
+
+[build-dependencies]
+lalrpop = "0.16.3"
