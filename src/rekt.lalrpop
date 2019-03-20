@@ -25,13 +25,7 @@ Comma<T>: Vec<T> = {
     }
 };
 
-pub Script: Vec<Box<Expr>> = {
-    <v:(<Stmt> ";")*> <e:Stmt> ";"? => {
-        let mut v = v;
-        v.push(e);
-        v
-    },
-};
+pub Script: Vec<Box<Expr>> = (<Stmt> ";")*;
 
 Stmt: Box<Expr> = {
     DeclKw T1 => Box::new(Expr::Decl(<>)),
