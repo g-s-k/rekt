@@ -31,9 +31,8 @@ Comma<T>: Vec<T> = {
 pub Script: Vec<Box<Statement>> = Stmt*;
 
 Stmt: Box<Statement> = {
-    <label: IDENT> ":" <s: AlmostStmt> => Box::new(Statement::Label(label.to_string(), s)),
     Defun,
-    AlmostStmt
+    IfForWhileStmt
 };
 
 VarDecl: Box<Statement> = {
@@ -42,79 +41,81 @@ VarDecl: Box<Statement> = {
 };
 
 Defun: Box<Statement> = {
-    "function" <name: IDENT> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
+    <generator: FuncType> <name: IDENT> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
         Box::new(Statement::Decl {
             kind: Declaration::Var,
             lhs: name.to_string(),
             rhs: Some(Box::new(Expr::Defun {
+                generator,
                 name: Some(name.to_string()),
                 params: params.into_iter().map(String::from).collect(),
                 body,
-                generator: false
-            }))
-        }),
-    "function*" <name: IDENT> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
-        Box::new(Statement::Decl {
-            kind: Declaration::Var,
-            lhs: name.to_string(),
-            rhs: Some(Box::new(Expr::Defun {
-                name: Some(name.to_string()),
-                params: params.into_iter().map(String::from).collect(),
-                body,
-                generator: true
             }))
         }),
 };
 
-AlmostStmt: Box<Statement> = {
-    ForLoop,
-    WhileLoop,
-    VarDecl,
-    IfStmt,
-    TryCatch,
-    Switch
+// See https://en.wikipedia.org/wiki/Dangling_else#Avoiding_the_conflict_in_LR_parsers
+
+IfForWhileStmt: Box<Statement> = {
+    OpenStmt,
+    ClosedStmt
 };
 
-ForLoop: Box<Statement> = {
-    "for" "(" <decl: DeclKw> <v: IDENT> "in" <obj: T1> ")" <body: AlmostStmt> =>
+OpenStmt: Box<Statement> = {
+    OpenIf<SubStmt>,
+    OpenIf<OpenStmt>,
+    ClosedIf<ClosedStmt, OpenStmt>,
+    ForLoop<OpenStmt>,
+    WhileLoop<OpenStmt>,
+    Label<OpenStmt>,
+};
+
+ClosedStmt: Box<Statement> = {
+    SubStmt,
+    ClosedIf<ClosedStmt, ClosedStmt>,
+    ForLoop<ClosedStmt>,
+    WhileLoop<ClosedStmt>,
+    Label<ClosedStmt>,
+};
+
+OpenIf<T>: Box<Statement> = {
+    "if" "(" <pred: T1> ")" <consq: T> => Box::new(Statement::If { pred, consq, alt: None }),
+};
+
+ClosedIf<T, U>: Box<Statement> = {
+    "if" "(" <pred: T1> ")" <consq: T> "else" <a: U> => Box::new(Statement::If { pred, consq, alt: Some(a) }),
+};
+
+Label<T>: Box<Statement> = {
+    <label: IDENT> ":" <s: T> => Box::new(Statement::Label(label.to_string(), s)),
+};
+
+ForLoop<T>: Box<Statement> = {
+    "for" "(" <decl: DeclKw> <v: IDENT> "in" <obj: T1> ")" <body: T> =>
         Box::new(Statement::ForIn { decl, var: v.to_string(), obj, body }),
-    "for" "(" <decl: DeclKw> <v: IDENT> "of" <obj: T1> ")" <body: AlmostStmt> =>
+    "for" "(" <decl: DeclKw> <v: IDENT> "of" <obj: T1> ")" <body: T> =>
         Box::new(Statement::ForOf { decl, var: v.to_string(), obj, body }),
-    "for" "(" <init: VarDecl> <term: T1> ";" <incr: T1> ")" <body: AlmostStmt> =>
+    "for" "(" <init: VarDecl> <term: T1> ";" <incr: T1> ")" <body: T> =>
         Box::new(Statement::For { init, term, incr, body }),
 };
 
-WhileLoop: Box<Statement> = {
-    "while" "(" <cond: T1> ")" <body: AlmostStmt> => Box::new(Statement::While {<>}),
-    "do" <body: AlmostStmt> "while" "(" <cond: T1> ")" => Box::new(Statement::DoWhile {<>})
-};
-
-IfStmt: Box<Statement> = {
-    MatchedIfStmt,
-    UnmatchedIfStmt
-};
-
-MatchedIfStmt: Box<Statement> = {
-    "if" "(" <pred: T1> ")" <consq: MatchedIfStmt> "else" <a: MatchedIfStmt> => Box::new(Statement::If {
-         pred, consq, alt: Some(a)
-    }),
-    SubStmt
-};
-
-UnmatchedIfStmt: Box<Statement> = {
-    "if" "(" <pred: T1> ")" <consq: MatchedIfStmt> "else" <a: UnmatchedIfStmt> => Box::new(Statement::If {
-         pred, consq, alt: Some(a)
-    }),
-    "if" "(" <pred: T1> ")" <consq: IfStmt> => Box::new(Statement::If {
-        pred, consq, alt: None
-    })
+WhileLoop<T>: Box<Statement> = {
+    "while" "(" <cond: T1> ")" <body: T> => Box::new(Statement::While {<>}),
 };
 
 TryCatch: Box<Statement> = {
-    "try" "{" <try_body: Stmt*> "}" "catch" "(" <excep: IDENT> ")" "{" <catch_: Stmt*> "}" <finally_body: ("finally" "{" <Stmt*> "}")?> =>
+    <try_body: Try> "catch" "(" <excep: IDENT> ")" "{" <catch_: Stmt*> "}" <finally_body: Finally?> =>
         Box::new(Statement::TryCatch { try_body, catch: Some((excep.to_string(), catch_)), finally_body }),
-    "try" "{" <try_body: Stmt*> "}" "finally" "{" <fin_: Stmt*> "}" =>
-        Box::new(Statement::TryCatch { try_body, catch: None, finally_body: Some(fin_) })
+    <try_body: Try> <finally: Finally> =>
+        Box::new(Statement::TryCatch { try_body, catch: None, finally_body: Some(finally) })
+};
+
+Try: Vec<Box<Statement>> = {
+    "try" "{" <Stmt *> "}" => <>
+};
+
+Finally: Vec<Box<Statement>> = {
+    "finally" "{" <Stmt *> "}" => <>
 };
 
 Switch: Box<Statement> = {
@@ -131,17 +132,29 @@ SubStmt: Box<Statement> = {
     "break" <IDENT?> ";" => Box::new(Statement::Break(<>.map(String::from))),
     "continue" <IDENT?> ";" => Box::new(Statement::Continue(<>.map(String::from))),
     "throw" <Exp> ";" => Box::new(Statement::Throw(<>)),
+    VarDecl,
+    TryCatch,
+    Switch,
+    "do" <body: IfForWhileStmt> "while" "(" <cond: T1> ")" => Box::new(Statement::DoWhile {<>}),
     "{" <Script> "}" => Box::new(Statement::Block(<>)),
     ";" => Box::new(Statement::Empty),
     <T1> ";" => Box::new(Statement::Plain(<>))
 };
 
 Exp: Box<Expr> = {
-    "function" <name: IDENT?> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
-        Box::new(Expr::Defun { name: name.map(String::from), params: params.into_iter().map(String::from).collect(), body, generator: false }),
-    "function*" <name: IDENT?> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
-        Box::new(Expr::Defun { name: name.map(String::from), params: params.into_iter().map(String::from).collect(), body, generator: true }),
+    <generator: FuncType> <name: IDENT?> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
+        Box::new(Expr::Defun {
+            generator,
+            name: name.map(String::from),
+            params: params.into_iter().map(String::from).collect(),
+            body
+        }),
     T1
+};
+
+FuncType: bool = {
+    "function" => false,
+    "function*" => true,
 };
 
 // For tier reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence#Table
