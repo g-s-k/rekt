@@ -57,6 +57,15 @@ pub enum Expr {
         obj: Box<Expr>,
         body: Box<Expr>,
     },
+    While {
+        cond: Box<Expr>,
+        body: Box<Expr>,
+    },
+    DoWhile {
+        cond: Box<Expr>,
+        body: Box<Expr>,
+    },
+    Label(String, Box<Expr>),
 }
 
 pub enum Opcode {
@@ -198,6 +207,9 @@ impl Debug for Expr {
             Expr::ForOf { var, obj, body, .. } => {
                 write!(f, "For[{}]Of[{:?}]{{{:?}}}", var, *obj, body)
             }
+            Expr::While { cond, body } => write!(f, "While({:?}){{{:?}}}", *cond, *body),
+            Expr::DoWhile { cond, body } => write!(f, "Do{{{:?}}}While({:?})", *body, *cond),
+            Expr::Label(l, e) => write!(f, "Label[{}]{{{:?}}}", l, *e),
         }
     }
 }

@@ -31,6 +31,7 @@ Comma<T>: Vec<T> = {
 pub Script: Vec<Box<Expr>> = Stmt*;
 
 Stmt: Box<Expr> = {
+    <label: IDENT> ":" <s: AlmostStmt> => Box::new(Expr::Label(label.to_string(), s)),
     Defun,
     AlmostStmt
 };
@@ -50,6 +51,7 @@ Defun: Box<Expr> = {
 
 AlmostStmt: Box<Expr> = {
     ForLoop,
+    WhileLoop,
     VarDecl,
     IfStmt,
     TryCatch,
@@ -63,6 +65,11 @@ ForLoop: Box<Expr> = {
         Box::new(Expr::ForOf { decl, var: v.to_string(), obj, body }),
     "for" "(" <init: VarDecl> <term: T1> ";" <incr: T1> ")" <body: AlmostStmt> =>
         Box::new(Expr::For { init, term, incr, body }),
+};
+
+WhileLoop: Box<Expr> = {
+    "while" "(" <cond: T1> ")" <body: AlmostStmt> => Box::new(Expr::While {<>}),
+    "do" <body: AlmostStmt> "while" "(" <cond: T1> ")" => Box::new(Expr::While {<>})
 };
 
 IfStmt: Box<Expr> = {
@@ -283,6 +290,8 @@ Comment: () = {
 match {
     "for",
     "of",
+    "while",
+    "do",
     "switch",
     "case",
     "default",
