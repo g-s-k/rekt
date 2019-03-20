@@ -1,4 +1,4 @@
-use crate::ast::{Assign, Declaration, Expr, Opcode};
+use crate::ast::{Assign, Case, Declaration, Expr, Opcode};
 
 grammar;
 
@@ -34,7 +34,8 @@ Stmt: Box<Expr> = {
     VarDecl,
     Defun,
     IfStmt,
-    TryCatch
+    TryCatch,
+    Switch
 };
 
 VarDecl: Box<Expr> = {
@@ -73,6 +74,15 @@ TryCatch: Box<Expr> = {
         Box::new(Expr::TryCatch(try_, Some((excep.to_string(), catch_)), fin_)),
     "try" "{" <try_: Stmt*> "}" "finally" "{" <fin_: Stmt*> "}" =>
         Box::new(Expr::TryCatch(try_, None, Some(fin_)))
+};
+
+Switch: Box<Expr> = {
+    "switch" "(" <T1> ")" "{" <SwitchCase*> "}" => Box::new(Expr::Switch(<>)),
+};
+
+SwitchCase: (Case, Vec<Box<Expr>>) = {
+    "case" <e: T1> ":" <s: Script> => (Case::Case(e), s),
+    "default" ":" <Script> => (Case::Default, <>)
 };
 
 SubStmt: Box<Expr> = {
@@ -252,6 +262,9 @@ Comment: () = {
 };
 
 match {
+    "switch",
+    "case",
+    "default",
     "try",
     "catch",
     "finally",

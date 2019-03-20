@@ -34,6 +34,7 @@ pub enum Expr {
         Option<(String, Vec<Box<Expr>>)>,
         Option<Vec<Box<Expr>>>,
     ),
+    Switch(Box<Expr>, Vec<(Case, Vec<Box<Expr>>)>),
 }
 
 pub enum Opcode {
@@ -94,6 +95,11 @@ pub enum Declaration {
     Const,
 }
 
+pub enum Case {
+    Case(Box<Expr>),
+    Default
+}
+
 impl Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -143,6 +149,7 @@ impl Debug for Expr {
             Expr::TryCatch(t, Some((e, c)), _) => write!(f, "Try{{{:?}}}Catch({}){{{:?}}}", *t, e, *c),
             Expr::TryCatch(t, _, Some(fi)) => write!(f, "Try{{{:?}}}Finally{{{:?}}}", *t, *fi),
             Expr::TryCatch(_, _, _) => unreachable!(),
+            Expr::Switch(e, c) => write!(f, "Switch({:?}){{{:?}}}", *e, c),
         }
     }
 }
@@ -243,5 +250,14 @@ impl Display for Declaration {
 impl Debug for Declaration {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self)
+    }
+}
+
+impl Debug for Case {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Case::Case(e) => write!(f, "Case[{:?}]", *e),
+            Case::Default => write!(f, "Default"),
+        }
     }
 }
