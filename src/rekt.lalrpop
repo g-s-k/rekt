@@ -31,11 +31,8 @@ Comma<T>: Vec<T> = {
 pub Script: Vec<Box<Expr>> = Stmt*;
 
 Stmt: Box<Expr> = {
-    VarDecl,
     Defun,
-    IfStmt,
-    TryCatch,
-    Switch
+    AlmostStmt
 };
 
 VarDecl: Box<Expr> = {
@@ -51,6 +48,22 @@ Defun: Box<Expr> = {
         Box::new(Expr::Generator { name: Some(name.to_string()), params: params.into_iter().map(String::from).collect(), body }),
 };
 
+AlmostStmt: Box<Expr> = {
+    ForLoop,
+    VarDecl,
+    IfStmt,
+    TryCatch,
+    Switch
+};
+
+ForLoop: Box<Expr> = {
+    "for" "(" <decl: DeclKw> <v: IDENT> "in" <obj: T1> ")" <body: AlmostStmt> =>
+        Box::new(Expr::ForIn { decl, var: v.to_string(), obj, body }),
+    "for" "(" <decl: DeclKw> <v: IDENT> "of" <obj: T1> ")" <body: AlmostStmt> =>
+        Box::new(Expr::ForOf { decl, var: v.to_string(), obj, body }),
+    "for" "(" <init: VarDecl> <term: T1> ";" <incr: T1> ")" <body: AlmostStmt> =>
+        Box::new(Expr::For { init, term, incr, body }),
+};
 
 IfStmt: Box<Expr> = {
     MatchedIfStmt,
@@ -268,6 +281,8 @@ Comment: () = {
 };
 
 match {
+    "for",
+    "of",
     "switch",
     "case",
     "default",

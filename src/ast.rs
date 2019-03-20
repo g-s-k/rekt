@@ -1,5 +1,8 @@
 use std::fmt::{self, Debug, Display};
 
+type Script = Vec<Box<Expr>>;
+type Args = Vec<Box<Expr>>;
+
 pub enum Expr {
     Num(f64),
     Bool(bool),
@@ -9,11 +12,11 @@ pub enum Expr {
     UnOp(Opcode, Box<Expr>),
     BinOp(Box<Expr>, Opcode, Box<Expr>),
     Tern(Box<Expr>, Box<Expr>, Box<Expr>),
-    New(String, Vec<Box<Expr>>),
+    New(String, Args),
     Access(Box<Expr>, Box<Expr>),
-    Call(Box<Expr>, Vec<Box<Expr>>),
+    Call(Box<Expr>, Args),
     Decl(Declaration, Box<Expr>),
-    Block(Vec<Box<Expr>>),
+    Block(Script),
     Empty,
     If {
         predicate: Box<Expr>,
@@ -23,23 +26,37 @@ pub enum Expr {
     Defun {
         name: Option<String>,
         params: Vec<String>,
-        body: Vec<Box<Expr>>,
+        body: Script,
     },
     Generator {
         name: Option<String>,
         params: Vec<String>,
-        body: Vec<Box<Expr>>,
+        body: Script,
     },
     Return(Option<Box<Expr>>),
     Break(Option<String>),
     Continue(Option<String>),
     Throw(Box<Expr>),
-    TryCatch(
-        Vec<Box<Expr>>,
-        Option<(String, Vec<Box<Expr>>)>,
-        Option<Vec<Box<Expr>>>,
-    ),
-    Switch(Box<Expr>, Vec<(Case, Vec<Box<Expr>>)>),
+    TryCatch(Script, Option<(String, Script)>, Option<Script>),
+    Switch(Box<Expr>, Vec<(Case, Script)>),
+    For {
+        init: Box<Expr>,
+        term: Box<Expr>,
+        incr: Box<Expr>,
+        body: Box<Expr>,
+    },
+    ForIn {
+        decl: Declaration,
+        var: String,
+        obj: Box<Expr>,
+        body: Box<Expr>,
+    },
+    ForOf {
+        decl: Declaration,
+        var: String,
+        obj: Box<Expr>,
+        body: Box<Expr>,
+    },
 }
 
 pub enum Opcode {
@@ -102,7 +119,7 @@ pub enum Declaration {
 
 pub enum Case {
     Case(Box<Expr>),
-    Default
+    Default,
 }
 
 impl Debug for Expr {
@@ -148,7 +165,9 @@ impl Debug for Expr {
                 params,
                 body,
             } => write!(f, "Generator[{}]({:?}){{{:?}}}", name, params, body),
-            Expr::Generator { params, body, .. } => write!(f, "Generator({:?}){{{:?}}}", params, body),
+            Expr::Generator { params, body, .. } => {
+                write!(f, "Generator({:?}){{{:?}}}", params, body)
+            }
             Expr::Return(Some(e)) => write!(f, "Return({:?})", *e),
             Expr::Return(_) => write!(f, "Return"),
             Expr::Break(Some(l)) => write!(f, "Break({})", l),
@@ -156,11 +175,29 @@ impl Debug for Expr {
             Expr::Continue(Some(l)) => write!(f, "Continue({})", l),
             Expr::Continue(_) => write!(f, "Continue"),
             Expr::Throw(e) => write!(f, "Throw({:?})", *e),
-            Expr::TryCatch(t, Some((e, c)), Some(fi)) => write!(f, "Try{{{:?}}}Catch({}){{{:?}}}Finally{{{:?}}}", *t, e, *c, *fi),
-            Expr::TryCatch(t, Some((e, c)), _) => write!(f, "Try{{{:?}}}Catch({}){{{:?}}}", *t, e, *c),
+            Expr::TryCatch(t, Some((e, c)), Some(fi)) => write!(
+                f,
+                "Try{{{:?}}}Catch({}){{{:?}}}Finally{{{:?}}}",
+                *t, e, *c, *fi
+            ),
+            Expr::TryCatch(t, Some((e, c)), _) => {
+                write!(f, "Try{{{:?}}}Catch({}){{{:?}}}", *t, e, *c)
+            }
             Expr::TryCatch(t, _, Some(fi)) => write!(f, "Try{{{:?}}}Finally{{{:?}}}", *t, *fi),
             Expr::TryCatch(_, _, _) => unreachable!(),
             Expr::Switch(e, c) => write!(f, "Switch({:?}){{{:?}}}", *e, c),
+            Expr::For {
+                init,
+                term,
+                incr,
+                body,
+            } => write!(f, "For({:?};{:?};{:?}){{{:?}}}", *init, *term, *incr, *body),
+            Expr::ForIn { var, obj, body, .. } => {
+                write!(f, "For[{}]In[{:?}]{{{:?}}}", var, *obj, body)
+            }
+            Expr::ForOf { var, obj, body, .. } => {
+                write!(f, "For[{}]Of[{:?}]{{{:?}}}", var, *obj, body)
+            }
         }
     }
 }
