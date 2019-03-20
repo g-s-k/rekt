@@ -20,6 +20,11 @@ pub enum Expr {
         consequent: Box<Expr>,
         alternative: Option<Box<Expr>>,
     },
+    Defun {
+        name: Option<String>,
+        params: Vec<String>,
+        body: Vec<Box<Expr>>,
+    },
 }
 
 pub enum Opcode {
@@ -111,11 +116,13 @@ impl Debug for Expr {
                 predicate,
                 consequent,
                 ..
-            } => write!(
-                f,
-                "If({:?}){{{:?}}}",
-                *predicate, *consequent
-            ),
+            } => write!(f, "If({:?}){{{:?}}}", *predicate, *consequent),
+            Expr::Defun {
+                name: Some(name),
+                params,
+                body,
+            } => write!(f, "Function[{}]({:?}){{{:?}}}", name, params, body),
+            Expr::Defun { params, body, .. } => write!(f, "Function({:?}){{{:?}}}", params, body),
         }
     }
 }

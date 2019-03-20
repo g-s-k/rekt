@@ -18,10 +18,13 @@ UnaryTier<Op, NextTier>: Box<Expr> = {
 };
 
 Comma<T>: Vec<T> = {
-    <v:(<T> ",")*> <e:T> => {
-        let mut v = v;
-        v.push(e);
-        v
+    <v:(<T> ",")*> <e:T?> => match e {
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+        None => v,
     }
 };
 
@@ -106,9 +109,9 @@ T19: Box<Expr> = {
     <T19> "." <T20> => Box::new(Expr::Access(<>)),
     <T19> "[" <T19> "]" => Box::new(Expr::Access(<>)),
     "new" <i:IDENT> "(" <v:Comma<T20>> ")" => Box::new(Expr::New(i.to_string(), v)),
-    "new" <i:IDENT> "(" ")" => Box::new(Expr::New(i.to_string(), vec![])),
+    "function" <name: IDENT?> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
+        Box::new(Expr::Defun { name: name.map(String::from), params: params.into_iter().map(String::from).collect(), body }),
     <T19> "(" <Comma<T2>> ")" => Box::new(Expr::Call(<>)),
-    <T19> "(" ")" => Box::new(Expr::Call(<>, vec![])),
     T20
 };
 
@@ -218,6 +221,7 @@ Comment: () = {
 };
 
 match {
+    "function",
     "if",
     "else",
     "var",
