@@ -1,7 +1,63 @@
 use std::fmt::{self, Debug, Display};
 
-type Script = Vec<Box<Expr>>;
+type Script = Vec<Box<Statement>>;
 type Args = Vec<Box<Expr>>;
+
+pub enum Statement {
+    Empty,
+    Plain(Box<Expr>),
+    Return(Option<Box<Expr>>),
+    Break(Option<String>),
+    Continue(Option<String>),
+    Throw(Box<Expr>),
+    Decl {
+        kind: Declaration,
+        lhs: String,
+        rhs: Option<Box<Expr>>,
+    },
+    Block(Vec<Box<Statement>>),
+    If {
+        pred: Box<Expr>,
+        consq: Box<Statement>,
+        alt: Option<Box<Statement>>,
+    },
+    TryCatch {
+        try_body: Script,
+        catch: Option<(String, Script)>,
+        finally_body: Option<Script>,
+    },
+    Switch {
+        value: Box<Expr>,
+        body: Vec<(Case, Script)>,
+    },
+    For {
+        init: Box<Statement>,
+        term: Box<Expr>,
+        incr: Box<Expr>,
+        body: Box<Statement>,
+    },
+    ForIn {
+        decl: Declaration,
+        var: String,
+        obj: Box<Expr>,
+        body: Box<Statement>,
+    },
+    ForOf {
+        decl: Declaration,
+        var: String,
+        obj: Box<Expr>,
+        body: Box<Statement>,
+    },
+    While {
+        cond: Box<Expr>,
+        body: Box<Statement>,
+    },
+    DoWhile {
+        cond: Box<Expr>,
+        body: Box<Statement>,
+    },
+    Label(String, Box<Statement>),
+}
 
 pub enum Expr {
     Num(f64),
@@ -15,57 +71,12 @@ pub enum Expr {
     New(String, Args),
     Access(Box<Expr>, Box<Expr>),
     Call(Box<Expr>, Args),
-    Decl(Declaration, Box<Expr>),
-    Block(Script),
-    Empty,
-    If {
-        predicate: Box<Expr>,
-        consequent: Box<Expr>,
-        alternative: Option<Box<Expr>>,
-    },
     Defun {
         name: Option<String>,
         params: Vec<String>,
         body: Script,
+        generator: bool,
     },
-    Generator {
-        name: Option<String>,
-        params: Vec<String>,
-        body: Script,
-    },
-    Return(Option<Box<Expr>>),
-    Break(Option<String>),
-    Continue(Option<String>),
-    Throw(Box<Expr>),
-    TryCatch(Script, Option<(String, Script)>, Option<Script>),
-    Switch(Box<Expr>, Vec<(Case, Script)>),
-    For {
-        init: Box<Expr>,
-        term: Box<Expr>,
-        incr: Box<Expr>,
-        body: Box<Expr>,
-    },
-    ForIn {
-        decl: Declaration,
-        var: String,
-        obj: Box<Expr>,
-        body: Box<Expr>,
-    },
-    ForOf {
-        decl: Declaration,
-        var: String,
-        obj: Box<Expr>,
-        body: Box<Expr>,
-    },
-    While {
-        cond: Box<Expr>,
-        body: Box<Expr>,
-    },
-    DoWhile {
-        cond: Box<Expr>,
-        body: Box<Expr>,
-    },
-    Label(String, Box<Expr>),
 }
 
 pub enum Opcode {
@@ -131,6 +142,71 @@ pub enum Case {
     Default,
 }
 
+impl Debug for Statement {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Statement::Empty => write!(f, "Empty"),
+            Statement::Plain(e) => write!(f, "{:?}", *e),
+            Statement::Decl {
+                kind,
+                lhs,
+                rhs: Some(r),
+            } => write!(f, "Declare[{} {} = {:?}]", kind, lhs, *r),
+            Statement::Decl { kind, lhs, .. } => write!(f, "Declare[{} {}]", kind, lhs),
+            Statement::Block(vals) => write!(f, "Block{{{:?}}}", vals),
+            Statement::If {
+                pred,
+                consq,
+                alt: Some(alt),
+            } => write!(f, "If({:?}){{{:?}}}Else{{{:?}}}", *pred, *consq, *alt),
+            Statement::If { pred, consq, .. } => write!(f, "If({:?}){{{:?}}}", *pred, *consq),
+            Statement::Return(Some(e)) => write!(f, "Return({:?})", *e),
+            Statement::Return(_) => write!(f, "Return"),
+            Statement::Break(Some(l)) => write!(f, "Break({})", l),
+            Statement::Break(_) => write!(f, "Break"),
+            Statement::Continue(Some(l)) => write!(f, "Continue({})", l),
+            Statement::Continue(_) => write!(f, "Continue"),
+            Statement::Throw(e) => write!(f, "Throw({:?})", *e),
+            Statement::TryCatch {
+                try_body,
+                catch: Some((e, c)),
+                finally_body: Some(fi),
+            } => write!(
+                f,
+                "Try{{{:?}}}Catch({}){{{:?}}}Finally{{{:?}}}",
+                *try_body, e, *c, *fi
+            ),
+            Statement::TryCatch {
+                try_body,
+                catch: Some((e, c)),
+                ..
+            } => write!(f, "Try{{{:?}}}Catch({}){{{:?}}}", *try_body, e, *c),
+            Statement::TryCatch {
+                try_body,
+                finally_body: Some(fi),
+                ..
+            } => write!(f, "Try{{{:?}}}Finally{{{:?}}}", *try_body, *fi),
+            Statement::TryCatch { .. } => unreachable!(),
+            Statement::Switch { value, body } => write!(f, "Switch({:?}){{{:?}}}", *value, body),
+            Statement::For {
+                init,
+                term,
+                incr,
+                body,
+            } => write!(f, "For({:?};{:?};{:?}){{{:?}}}", *init, *term, *incr, *body),
+            Statement::ForIn { var, obj, body, .. } => {
+                write!(f, "For[{}]In[{:?}]{{{:?}}}", var, *obj, body)
+            }
+            Statement::ForOf { var, obj, body, .. } => {
+                write!(f, "For[{}]Of[{:?}]{{{:?}}}", var, *obj, body)
+            }
+            Statement::While { cond, body } => write!(f, "While({:?}){{{:?}}}", *cond, *body),
+            Statement::DoWhile { cond, body } => write!(f, "Do{{{:?}}}While({:?})", *body, *cond),
+            Statement::Label(l, e) => write!(f, "Label[{}]{{{:?}}}", l, *e),
+        }
+    }
+}
+
 impl Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -146,70 +222,31 @@ impl Debug for Expr {
             Expr::New(name, args) => write!(f, "New[ {}({:?}) ]", name, args),
             Expr::Access(obj, key) => write!(f, "Access( {:?}[{:?}] )", *obj, *key),
             Expr::Call(func, args) => write!(f, "Call[ {:?}({:?}) ]", *func, *args),
-            Expr::Decl(kind, decl) => write!(f, "Declare[{}, {:?}]", kind, *decl),
-            Expr::Block(vals) => write!(f, "Block{{{:?}}}", vals),
-            Expr::Empty => write!(f, "Empty"),
-            Expr::If {
-                predicate,
-                consequent,
-                alternative: Some(alt),
-            } => write!(
-                f,
-                "If({:?}){{{:?}}}Else{{{:?}}}",
-                *predicate, *consequent, *alt
-            ),
-            Expr::If {
-                predicate,
-                consequent,
-                ..
-            } => write!(f, "If({:?}){{{:?}}}", *predicate, *consequent),
             Expr::Defun {
                 name: Some(name),
                 params,
                 body,
-            } => write!(f, "Function[{}]({:?}){{{:?}}}", name, params, body),
-            Expr::Defun { params, body, .. } => write!(f, "Function({:?}){{{:?}}}", params, body),
-            Expr::Generator {
-                name: Some(name),
+                generator,
+            } => write!(
+                f,
+                "Function{}[{}]({:?}){{{:?}}}",
+                if *generator { "*" } else { "" },
+                name,
+                params,
+                body
+            ),
+            Expr::Defun {
                 params,
                 body,
-            } => write!(f, "Generator[{}]({:?}){{{:?}}}", name, params, body),
-            Expr::Generator { params, body, .. } => {
-                write!(f, "Generator({:?}){{{:?}}}", params, body)
-            }
-            Expr::Return(Some(e)) => write!(f, "Return({:?})", *e),
-            Expr::Return(_) => write!(f, "Return"),
-            Expr::Break(Some(l)) => write!(f, "Break({})", l),
-            Expr::Break(_) => write!(f, "Break"),
-            Expr::Continue(Some(l)) => write!(f, "Continue({})", l),
-            Expr::Continue(_) => write!(f, "Continue"),
-            Expr::Throw(e) => write!(f, "Throw({:?})", *e),
-            Expr::TryCatch(t, Some((e, c)), Some(fi)) => write!(
+                generator,
+                ..
+            } => write!(
                 f,
-                "Try{{{:?}}}Catch({}){{{:?}}}Finally{{{:?}}}",
-                *t, e, *c, *fi
+                "Function{}({:?}){{{:?}}}",
+                if *generator { "*" } else { "" },
+                params,
+                body
             ),
-            Expr::TryCatch(t, Some((e, c)), _) => {
-                write!(f, "Try{{{:?}}}Catch({}){{{:?}}}", *t, e, *c)
-            }
-            Expr::TryCatch(t, _, Some(fi)) => write!(f, "Try{{{:?}}}Finally{{{:?}}}", *t, *fi),
-            Expr::TryCatch(_, _, _) => unreachable!(),
-            Expr::Switch(e, c) => write!(f, "Switch({:?}){{{:?}}}", *e, c),
-            Expr::For {
-                init,
-                term,
-                incr,
-                body,
-            } => write!(f, "For({:?};{:?};{:?}){{{:?}}}", *init, *term, *incr, *body),
-            Expr::ForIn { var, obj, body, .. } => {
-                write!(f, "For[{}]In[{:?}]{{{:?}}}", var, *obj, body)
-            }
-            Expr::ForOf { var, obj, body, .. } => {
-                write!(f, "For[{}]Of[{:?}]{{{:?}}}", var, *obj, body)
-            }
-            Expr::While { cond, body } => write!(f, "While({:?}){{{:?}}}", *cond, *body),
-            Expr::DoWhile { cond, body } => write!(f, "Do{{{:?}}}While({:?})", *body, *cond),
-            Expr::Label(l, e) => write!(f, "Label[{}]{{{:?}}}", l, *e),
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::ast::{Assign, Case, Declaration, Expr, Opcode};
+use crate::ast::{Assign, Case, Declaration, Expr, Opcode, Statement};
 
 grammar;
 
@@ -28,28 +28,45 @@ Comma<T>: Vec<T> = {
     }
 };
 
-pub Script: Vec<Box<Expr>> = Stmt*;
+pub Script: Vec<Box<Statement>> = Stmt*;
 
-Stmt: Box<Expr> = {
-    <label: IDENT> ":" <s: AlmostStmt> => Box::new(Expr::Label(label.to_string(), s)),
+Stmt: Box<Statement> = {
+    <label: IDENT> ":" <s: AlmostStmt> => Box::new(Statement::Label(label.to_string(), s)),
     Defun,
     AlmostStmt
 };
 
-VarDecl: Box<Expr> = {
-    <DeclKw> <Ident> ";" => Box::new(Expr::Decl(<>)),
-    <k: DeclKw> <i: Ident> "=" <e: Exp> ";" =>
-        Box::new(Expr::Decl(k, Box::new(Expr::BinOp(i, Opcode::Asn(Assign::Basic), e))))
+VarDecl: Box<Statement> = {
+    <kind: DeclKw> <lhs: IDENT> <rhs: ("=" <Exp>)?> ";" =>
+        Box::new(Statement::Decl { kind, lhs: lhs.to_string(), rhs })
 };
 
-Defun: Box<Expr> = {
+Defun: Box<Statement> = {
     "function" <name: IDENT> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
-        Box::new(Expr::Defun { name: Some(name.to_string()), params: params.into_iter().map(String::from).collect(), body }),
+        Box::new(Statement::Decl {
+            kind: Declaration::Var,
+            lhs: name.to_string(),
+            rhs: Some(Box::new(Expr::Defun {
+                name: Some(name.to_string()),
+                params: params.into_iter().map(String::from).collect(),
+                body,
+                generator: false
+            }))
+        }),
     "function*" <name: IDENT> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
-        Box::new(Expr::Generator { name: Some(name.to_string()), params: params.into_iter().map(String::from).collect(), body }),
+        Box::new(Statement::Decl {
+            kind: Declaration::Var,
+            lhs: name.to_string(),
+            rhs: Some(Box::new(Expr::Defun {
+                name: Some(name.to_string()),
+                params: params.into_iter().map(String::from).collect(),
+                body,
+                generator: true
+            }))
+        }),
 };
 
-AlmostStmt: Box<Expr> = {
+AlmostStmt: Box<Statement> = {
     ForLoop,
     WhileLoop,
     VarDecl,
@@ -58,72 +75,72 @@ AlmostStmt: Box<Expr> = {
     Switch
 };
 
-ForLoop: Box<Expr> = {
+ForLoop: Box<Statement> = {
     "for" "(" <decl: DeclKw> <v: IDENT> "in" <obj: T1> ")" <body: AlmostStmt> =>
-        Box::new(Expr::ForIn { decl, var: v.to_string(), obj, body }),
+        Box::new(Statement::ForIn { decl, var: v.to_string(), obj, body }),
     "for" "(" <decl: DeclKw> <v: IDENT> "of" <obj: T1> ")" <body: AlmostStmt> =>
-        Box::new(Expr::ForOf { decl, var: v.to_string(), obj, body }),
+        Box::new(Statement::ForOf { decl, var: v.to_string(), obj, body }),
     "for" "(" <init: VarDecl> <term: T1> ";" <incr: T1> ")" <body: AlmostStmt> =>
-        Box::new(Expr::For { init, term, incr, body }),
+        Box::new(Statement::For { init, term, incr, body }),
 };
 
-WhileLoop: Box<Expr> = {
-    "while" "(" <cond: T1> ")" <body: AlmostStmt> => Box::new(Expr::While {<>}),
-    "do" <body: AlmostStmt> "while" "(" <cond: T1> ")" => Box::new(Expr::While {<>})
+WhileLoop: Box<Statement> = {
+    "while" "(" <cond: T1> ")" <body: AlmostStmt> => Box::new(Statement::While {<>}),
+    "do" <body: AlmostStmt> "while" "(" <cond: T1> ")" => Box::new(Statement::DoWhile {<>})
 };
 
-IfStmt: Box<Expr> = {
+IfStmt: Box<Statement> = {
     MatchedIfStmt,
     UnmatchedIfStmt
 };
 
-MatchedIfStmt: Box<Expr> = {
-    "if" "(" <predicate: T1> ")" <consequent: MatchedIfStmt> "else" <a: MatchedIfStmt> => Box::new(Expr::If {
-         predicate, consequent, alternative: Some(a)
+MatchedIfStmt: Box<Statement> = {
+    "if" "(" <pred: T1> ")" <consq: MatchedIfStmt> "else" <a: MatchedIfStmt> => Box::new(Statement::If {
+         pred, consq, alt: Some(a)
     }),
     SubStmt
 };
 
-UnmatchedIfStmt: Box<Expr> = {
-    "if" "(" <predicate: T1> ")" <consequent: MatchedIfStmt> "else" <a: UnmatchedIfStmt> => Box::new(Expr::If {
-         predicate, consequent, alternative: Some(a)
+UnmatchedIfStmt: Box<Statement> = {
+    "if" "(" <pred: T1> ")" <consq: MatchedIfStmt> "else" <a: UnmatchedIfStmt> => Box::new(Statement::If {
+         pred, consq, alt: Some(a)
     }),
-    "if" "(" <predicate: T1> ")" <consequent: IfStmt> => Box::new(Expr::If {
-        predicate, consequent, alternative: None
+    "if" "(" <pred: T1> ")" <consq: IfStmt> => Box::new(Statement::If {
+        pred, consq, alt: None
     })
 };
 
-TryCatch: Box<Expr> = {
-    "try" "{" <try_: Stmt*> "}" "catch" "(" <excep: IDENT> ")" "{" <catch_: Stmt*> "}" <fin_: ("finally" "{" <Stmt*> "}")?> =>
-        Box::new(Expr::TryCatch(try_, Some((excep.to_string(), catch_)), fin_)),
-    "try" "{" <try_: Stmt*> "}" "finally" "{" <fin_: Stmt*> "}" =>
-        Box::new(Expr::TryCatch(try_, None, Some(fin_)))
+TryCatch: Box<Statement> = {
+    "try" "{" <try_body: Stmt*> "}" "catch" "(" <excep: IDENT> ")" "{" <catch_: Stmt*> "}" <finally_body: ("finally" "{" <Stmt*> "}")?> =>
+        Box::new(Statement::TryCatch { try_body, catch: Some((excep.to_string(), catch_)), finally_body }),
+    "try" "{" <try_body: Stmt*> "}" "finally" "{" <fin_: Stmt*> "}" =>
+        Box::new(Statement::TryCatch { try_body, catch: None, finally_body: Some(fin_) })
 };
 
-Switch: Box<Expr> = {
-    "switch" "(" <T1> ")" "{" <SwitchCase*> "}" => Box::new(Expr::Switch(<>)),
+Switch: Box<Statement> = {
+    "switch" "(" <value: T1> ")" "{" <body: SwitchCase*> "}" => Box::new(Statement::Switch {<>}),
 };
 
-SwitchCase: (Case, Vec<Box<Expr>>) = {
+SwitchCase: (Case, Vec<Box<Statement>>) = {
     "case" <e: T1> ":" <s: Script> => (Case::Case(e), s),
     "default" ":" <Script> => (Case::Default, <>)
 };
 
-SubStmt: Box<Expr> = {
-    "return" <Exp?> ";" => Box::new(Expr::Return(<>)),
-    "break" <IDENT?> ";" => Box::new(Expr::Break(<>.map(String::from))),
-    "continue" <IDENT?> ";" => Box::new(Expr::Continue(<>.map(String::from))),
-    "throw" <Exp> ";" => Box::new(Expr::Throw(<>)),
-    "{" <Script> "}" => Box::new(Expr::Block(<>)),
-    ";" => Box::new(Expr::Empty),
-    <T1> ";" => <>
+SubStmt: Box<Statement> = {
+    "return" <Exp?> ";" => Box::new(Statement::Return(<>)),
+    "break" <IDENT?> ";" => Box::new(Statement::Break(<>.map(String::from))),
+    "continue" <IDENT?> ";" => Box::new(Statement::Continue(<>.map(String::from))),
+    "throw" <Exp> ";" => Box::new(Statement::Throw(<>)),
+    "{" <Script> "}" => Box::new(Statement::Block(<>)),
+    ";" => Box::new(Statement::Empty),
+    <T1> ";" => Box::new(Statement::Plain(<>))
 };
 
 Exp: Box<Expr> = {
     "function" <name: IDENT?> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
-        Box::new(Expr::Defun { name: name.map(String::from), params: params.into_iter().map(String::from).collect(), body }),
+        Box::new(Expr::Defun { name: name.map(String::from), params: params.into_iter().map(String::from).collect(), body, generator: false }),
     "function*" <name: IDENT?> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
-        Box::new(Expr::Generator { name: name.map(String::from), params: params.into_iter().map(String::from).collect(), body }),
+        Box::new(Expr::Defun { name: name.map(String::from), params: params.into_iter().map(String::from).collect(), body, generator: true }),
     T1
 };
 
