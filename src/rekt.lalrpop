@@ -107,7 +107,8 @@ T19: Box<Expr> = {
     <T19> "[" <T19> "]" => Box::new(Expr::Access(<>)),
     "new" <i:IDENT> "(" <v:Comma<T20>> ")" => Box::new(Expr::New(i.to_string(), v)),
     "new" <i:IDENT> "(" ")" => Box::new(Expr::New(i.to_string(), vec![])),
-    <T19> "(" <Comma<T20>> ")" => Box::new(Expr::Call(<>)),
+    <T19> "(" <Comma<T2>> ")" => Box::new(Expr::Call(<>)),
+    <T19> "(" ")" => Box::new(Expr::Call(<>, vec![])),
     T20
 };
 
