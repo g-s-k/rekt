@@ -44,8 +44,12 @@ VarDecl: Box<Expr> = {
         Box::new(Expr::Decl(k, Box::new(Expr::BinOp(i, Opcode::Asn(Assign::Basic), e))))
 };
 
-Defun: Box<Expr> = "function" <name: IDENT> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
-    Box::new(Expr::Defun { name: Some(name.to_string()), params: params.into_iter().map(String::from).collect(), body });
+Defun: Box<Expr> = {
+    "function" <name: IDENT> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
+        Box::new(Expr::Defun { name: Some(name.to_string()), params: params.into_iter().map(String::from).collect(), body }),
+    "function*" <name: IDENT> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
+        Box::new(Expr::Generator { name: Some(name.to_string()), params: params.into_iter().map(String::from).collect(), body }),
+};
 
 
 IfStmt: Box<Expr> = {
@@ -98,6 +102,8 @@ SubStmt: Box<Expr> = {
 Exp: Box<Expr> = {
     "function" <name: IDENT?> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
         Box::new(Expr::Defun { name: name.map(String::from), params: params.into_iter().map(String::from).collect(), body }),
+    "function*" <name: IDENT?> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
+        Box::new(Expr::Generator { name: name.map(String::from), params: params.into_iter().map(String::from).collect(), body }),
     T1
 };
 
@@ -273,6 +279,7 @@ match {
     "break",
     "continue",
     "function",
+    "function*",
     "if",
     "else",
     "var",
