@@ -34,7 +34,14 @@ Stmt: Box<Expr> = {
 
 // For tier reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence#Table
 
-T1: Box<Expr> = Comma<T2> => Box::new(Expr::Seq(<>));
+T1: Box<Expr> = {
+    <v:(<T2> ",")+> <e:T2> => {
+        let mut v = v;
+        v.push(e);
+        Box::new(Expr::Seq(v))
+    },
+    T2
+};
 
 T2 = UnaryTier<YieldOp, T3>;
 
