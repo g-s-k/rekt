@@ -68,6 +68,7 @@ UnmatchedIfStmt: Box<Expr> = {
 };
 
 SubStmt: Box<Expr> = {
+    "return" <Exp> ";" => Box::new(Expr::Return(<>)),
     "{" <Script> "}" => Box::new(Expr::Block(<>)),
     ";" => Box::new(Expr::Empty),
     <T1> ";" => <>

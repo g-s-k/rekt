@@ -25,6 +25,7 @@ pub enum Expr {
         params: Vec<String>,
         body: Vec<Box<Expr>>,
     },
+    Return(Box<Expr>),
 }
 
 pub enum Opcode {
@@ -123,6 +124,7 @@ impl Debug for Expr {
                 body,
             } => write!(f, "Function[{}]({:?}){{{:?}}}", name, params, body),
             Expr::Defun { params, body, .. } => write!(f, "Function({:?}){{{:?}}}", params, body),
+            Expr::Return(e) => write!(f, "Return({:?})", *e),
         }
     }
 }
