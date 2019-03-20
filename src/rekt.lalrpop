@@ -38,7 +38,7 @@ Stmt: Box<Expr> = {
 
 VarDecl: Box<Expr> = {
     <DeclKw> <Ident> ";" => Box::new(Expr::Decl(<>)),
-    <k: DeclKw> <i: Ident> "=" <e: T1> ";" =>
+    <k: DeclKw> <i: Ident> "=" <e: Exp> ";" =>
         Box::new(Expr::Decl(k, Box::new(Expr::BinOp(i, Opcode::Asn(Assign::Basic), e))))
 };
 
@@ -73,6 +73,12 @@ SubStmt: Box<Expr> = {
     <T1> ";" => <>
 };
 
+Exp: Box<Expr> = {
+    "function" <name: IDENT?> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
+        Box::new(Expr::Defun { name: name.map(String::from), params: params.into_iter().map(String::from).collect(), body }),
+    T1
+};
+
 // For tier reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence#Table
 
 T1: Box<Expr> = {
@@ -81,8 +87,6 @@ T1: Box<Expr> = {
         v.push(e);
         Box::new(Expr::Seq(v))
     },
-    // "function" <name: IDENT?> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
-    //     Box::new(Expr::Defun { name: name.map(String::from), params: params.into_iter().map(String::from).collect(), body }),
     T2
 };
 
@@ -131,7 +135,7 @@ T19: Box<Expr> = {
 };
 
 T20: Box<Expr> = {
-    "(" <T1> ")" => <>,
+    "(" <Exp> ")" => <>,
     Term
 };
 
