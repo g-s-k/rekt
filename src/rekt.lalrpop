@@ -68,7 +68,10 @@ UnmatchedIfStmt: Box<Expr> = {
 };
 
 SubStmt: Box<Expr> = {
-    "return" <Exp> ";" => Box::new(Expr::Return(<>)),
+    "return" <Exp?> ";" => Box::new(Expr::Return(<>)),
+    "break" <IDENT?> ";" => Box::new(Expr::Break(<>.map(String::from))),
+    "continue" <IDENT?> ";" => Box::new(Expr::Continue(<>.map(String::from))),
+    "throw" <Exp> ";" => Box::new(Expr::Throw(<>)),
     "{" <Script> "}" => Box::new(Expr::Block(<>)),
     ";" => Box::new(Expr::Empty),
     <T1> ";" => <>
@@ -241,6 +244,10 @@ Comment: () = {
 };
 
 match {
+    "throw",
+    "return",
+    "break",
+    "continue",
     "function",
     "if",
     "else",
