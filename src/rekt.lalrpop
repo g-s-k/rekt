@@ -31,6 +31,22 @@ Comma<T>: Vec<T> = {
 pub Script: Vec<Box<Expr>> = Stmt*;
 
 Stmt: Box<Expr> = {
+    VarDecl,
+    Defun,
+    IfStmt
+};
+
+VarDecl: Box<Expr> = {
+    <DeclKw> <Ident> ";" => Box::new(Expr::Decl(<>)),
+    <k: DeclKw> <i: Ident> "=" <e: T1> ";" =>
+        Box::new(Expr::Decl(k, Box::new(Expr::BinOp(i, Opcode::Asn(Assign::Basic), e))))
+};
+
+Defun: Box<Expr> = "function" <name: IDENT> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
+    Box::new(Expr::Defun { name: Some(name.to_string()), params: params.into_iter().map(String::from).collect(), body });
+
+
+IfStmt: Box<Expr> = {
     MatchedIfStmt,
     UnmatchedIfStmt
 };
@@ -46,13 +62,12 @@ UnmatchedIfStmt: Box<Expr> = {
     "if" "(" <predicate: T1> ")" <consequent: MatchedIfStmt> "else" <a: UnmatchedIfStmt> => Box::new(Expr::If {
          predicate, consequent, alternative: Some(a)
     }),
-    "if" "(" <predicate: T1> ")" <consequent: Stmt> => Box::new(Expr::If {
+    "if" "(" <predicate: T1> ")" <consequent: IfStmt> => Box::new(Expr::If {
         predicate, consequent, alternative: None
     })
 };
 
 SubStmt: Box<Expr> = {
-    <DeclKw> <T1> ";" => Box::new(Expr::Decl(<>)),
     "{" <Script> "}" => Box::new(Expr::Block(<>)),
     ";" => Box::new(Expr::Empty),
     <T1> ";" => <>
@@ -66,6 +81,8 @@ T1: Box<Expr> = {
         v.push(e);
         Box::new(Expr::Seq(v))
     },
+    // "function" <name: IDENT?> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
+    //     Box::new(Expr::Defun { name: name.map(String::from), params: params.into_iter().map(String::from).collect(), body }),
     T2
 };
 
@@ -109,8 +126,6 @@ T19: Box<Expr> = {
     <T19> "." <T20> => Box::new(Expr::Access(<>)),
     <T19> "[" <T19> "]" => Box::new(Expr::Access(<>)),
     "new" <i:IDENT> "(" <v:Comma<T20>> ")" => Box::new(Expr::New(i.to_string(), v)),
-    "function" <name: IDENT?> "(" <params: Comma<IDENT>> ")" "{" <body: Script> "}" =>
-        Box::new(Expr::Defun { name: name.map(String::from), params: params.into_iter().map(String::from).collect(), body }),
     <T19> "(" <Comma<T2>> ")" => Box::new(Expr::Call(<>)),
     T20
 };
