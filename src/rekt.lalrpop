@@ -33,7 +33,8 @@ pub Script: Vec<Box<Expr>> = Stmt*;
 Stmt: Box<Expr> = {
     VarDecl,
     Defun,
-    IfStmt
+    IfStmt,
+    TryCatch
 };
 
 VarDecl: Box<Expr> = {
@@ -65,6 +66,13 @@ UnmatchedIfStmt: Box<Expr> = {
     "if" "(" <predicate: T1> ")" <consequent: IfStmt> => Box::new(Expr::If {
         predicate, consequent, alternative: None
     })
+};
+
+TryCatch: Box<Expr> = {
+    "try" "{" <try_: Stmt*> "}" "catch" "(" <excep: IDENT> ")" "{" <catch_: Stmt*> "}" <fin_: ("finally" "{" <Stmt*> "}")?> =>
+        Box::new(Expr::TryCatch(try_, Some((excep.to_string(), catch_)), fin_)),
+    "try" "{" <try_: Stmt*> "}" "finally" "{" <fin_: Stmt*> "}" =>
+        Box::new(Expr::TryCatch(try_, None, Some(fin_)))
 };
 
 SubStmt: Box<Expr> = {
@@ -244,6 +252,9 @@ Comment: () = {
 };
 
 match {
+    "try",
+    "catch",
+    "finally",
     "throw",
     "return",
     "break",

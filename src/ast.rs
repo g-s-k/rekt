@@ -29,6 +29,11 @@ pub enum Expr {
     Break(Option<String>),
     Continue(Option<String>),
     Throw(Box<Expr>),
+    TryCatch(
+        Vec<Box<Expr>>,
+        Option<(String, Vec<Box<Expr>>)>,
+        Option<Vec<Box<Expr>>>,
+    ),
 }
 
 pub enum Opcode {
@@ -134,6 +139,10 @@ impl Debug for Expr {
             Expr::Continue(Some(l)) => write!(f, "Continue({})", l),
             Expr::Continue(_) => write!(f, "Continue"),
             Expr::Throw(e) => write!(f, "Throw({:?})", *e),
+            Expr::TryCatch(t, Some((e, c)), Some(fi)) => write!(f, "Try{{{:?}}}Catch({}){{{:?}}}Finally{{{:?}}}", *t, e, *c, *fi),
+            Expr::TryCatch(t, Some((e, c)), _) => write!(f, "Try{{{:?}}}Catch({}){{{:?}}}", *t, e, *c),
+            Expr::TryCatch(t, _, Some(fi)) => write!(f, "Try{{{:?}}}Finally{{{:?}}}", *t, *fi),
+            Expr::TryCatch(_, _, _) => unreachable!(),
         }
     }
 }
