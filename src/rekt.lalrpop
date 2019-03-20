@@ -25,11 +25,16 @@ Comma<T>: Vec<T> = {
     }
 };
 
-pub Script: Vec<Box<Expr>> = (<Stmt> ";")*;
+pub Script: Vec<Box<Expr>> = Stmt*;
 
 Stmt: Box<Expr> = {
-    DeclKw T1 => Box::new(Expr::Decl(<>)),
-    T1
+    <DeclKw> <T1> ";" => Box::new(Expr::Decl(<>)),
+    "{" <Script> "}" => Box::new(Expr::Block(<>)),
+    ";" => Box::new(Expr::Empty),
+    "if" "(" <predicate: T1> ")" <consequent: Stmt> "else" <alternative: Stmt> => Box::new(Expr::If{
+         predicate, consequent, alternative
+    }),
+    <T1> ";" => <>
 };
 
 // For tier reference: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Operator_Precedence#Table
@@ -194,6 +199,8 @@ Comment: () = {
 };
 
 match {
+    "if",
+    "else",
     "var",
     "let",
     "const",

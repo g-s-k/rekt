@@ -13,6 +13,13 @@ pub enum Expr {
     Access(Box<Expr>, Box<Expr>),
     Call(Box<Expr>, Vec<Box<Expr>>),
     Decl(Declaration, Box<Expr>),
+    Block(Vec<Box<Expr>>),
+    Empty,
+    If {
+        predicate: Box<Expr>,
+        consequent: Box<Expr>,
+        alternative: Box<Expr>,
+    },
 }
 
 pub enum Opcode {
@@ -89,6 +96,17 @@ impl Debug for Expr {
             Expr::Access(obj, key) => write!(f, "Access( {:?}[{:?}] )", *obj, *key),
             Expr::Call(func, args) => write!(f, "Call[ {:?}({:?}) ]", *func, *args),
             Expr::Decl(kind, decl) => write!(f, "Declare[{}, {:?}]", kind, *decl),
+            Expr::Block(vals) => write!(f, "Block{{{:?}}}", vals),
+            Expr::Empty => write!(f, "Empty"),
+            Expr::If {
+                predicate,
+                consequent,
+                alternative,
+            } => write!(
+                f,
+                "If({:?}){{{:?}}}Else{{{:?}}}",
+                *predicate, *consequent, *alternative
+            ),
         }
     }
 }
