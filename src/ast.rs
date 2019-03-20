@@ -18,7 +18,7 @@ pub enum Expr {
     If {
         predicate: Box<Expr>,
         consequent: Box<Expr>,
-        alternative: Box<Expr>,
+        alternative: Option<Box<Expr>>,
     },
 }
 
@@ -101,11 +101,20 @@ impl Debug for Expr {
             Expr::If {
                 predicate,
                 consequent,
-                alternative,
+                alternative: Some(alt),
             } => write!(
                 f,
                 "If({:?}){{{:?}}}Else{{{:?}}}",
-                *predicate, *consequent, *alternative
+                *predicate, *consequent, *alt
+            ),
+            Expr::If {
+                predicate,
+                consequent,
+                ..
+            } => write!(
+                f,
+                "If({:?}){{{:?}}}",
+                *predicate, *consequent
             ),
         }
     }

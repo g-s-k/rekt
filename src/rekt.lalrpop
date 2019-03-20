@@ -28,12 +28,30 @@ Comma<T>: Vec<T> = {
 pub Script: Vec<Box<Expr>> = Stmt*;
 
 Stmt: Box<Expr> = {
+    MatchedIfStmt,
+    UnmatchedIfStmt
+};
+
+MatchedIfStmt: Box<Expr> = {
+    "if" "(" <predicate: T1> ")" <consequent: MatchedIfStmt> "else" <a: MatchedIfStmt> => Box::new(Expr::If {
+         predicate, consequent, alternative: Some(a)
+    }),
+    SubStmt
+};
+
+UnmatchedIfStmt: Box<Expr> = {
+    "if" "(" <predicate: T1> ")" <consequent: MatchedIfStmt> "else" <a: UnmatchedIfStmt> => Box::new(Expr::If {
+         predicate, consequent, alternative: Some(a)
+    }),
+    "if" "(" <predicate: T1> ")" <consequent: Stmt> => Box::new(Expr::If {
+        predicate, consequent, alternative: None
+    })
+};
+
+SubStmt: Box<Expr> = {
     <DeclKw> <T1> ";" => Box::new(Expr::Decl(<>)),
     "{" <Script> "}" => Box::new(Expr::Block(<>)),
     ";" => Box::new(Expr::Empty),
-    "if" "(" <predicate: T1> ")" <consequent: Stmt> "else" <alternative: Stmt> => Box::new(Expr::If{
-         predicate, consequent, alternative
-    }),
     <T1> ";" => <>
 };
 
