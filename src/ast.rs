@@ -77,6 +77,7 @@ pub enum Expr {
         body: Script,
         generator: bool,
     },
+    Array(Vec<Box<Expr>>),
 }
 
 pub enum Opcode {
@@ -247,6 +248,7 @@ impl Debug for Expr {
                 params,
                 body
             ),
+            Expr::Array(v) => write!(f, "Array[{:?}]", v),
         }
     }
 }

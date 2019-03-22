@@ -149,6 +149,12 @@ Exp: Box<Expr> = {
             params: params.into_iter().map(String::from).collect(),
             body
         }),
+    "[" "]" => Box::new(Expr::Array(vec![])),
+    "[" <v: (<T2> ",")*> <e: T2> "]" => {
+        let mut v = v;
+        v.push(e);
+        Box::new(Expr::Array(v))
+    },
     T1
 };
 
