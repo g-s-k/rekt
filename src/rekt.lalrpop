@@ -149,12 +149,7 @@ Exp: Box<Expr> = {
             params: params.into_iter().map(String::from).collect(),
             body
         }),
-    "[" "]" => Box::new(Expr::Array(vec![])),
-    "[" <v: (<T2> ",")*> <e: T2> "]" => {
-        let mut v = v;
-        v.push(e);
-        Box::new(Expr::Array(v))
-    },
+    "{" <Comma<ObjectEntry>> "}" => Box::new(Expr::Object(<>.into_iter().collect())),
     T1
 };
 
@@ -314,6 +309,13 @@ Term: Box<Expr> = {
     BOOL => Box::new(Expr::Bool(<>.parse().unwrap())),
     NUM => Box::new(Expr::Num(<>.parse().unwrap())),
     STRING => Box::new(Expr::Str(<>.to_string())),
+    "[" <Comma<T2>> "]" => Box::new(Expr::Array(<>)),
+};
+
+ObjectEntry: (String, Box<Expr>) = {
+    <k: IDENT> ":" <v: T2> => (k.to_string(), v),
+    IDENT => (<>.to_string(), Box::new(Expr::Ident(<>.to_string()))),
+    <k: STRING> ":" <v: T2> => (k.to_string(), v),
 };
 
 Ident: Box<Expr> = IDENT => Box::new(Expr::Ident(<>.to_string()));

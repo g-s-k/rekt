@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::{self, Debug, Display};
 
 type Script = Vec<Box<Statement>>;
@@ -78,6 +79,7 @@ pub enum Expr {
         generator: bool,
     },
     Array(Vec<Box<Expr>>),
+    Object(HashMap<String, Box<Expr>>),
 }
 
 pub enum Opcode {
@@ -249,6 +251,7 @@ impl Debug for Expr {
                 body
             ),
             Expr::Array(v) => write!(f, "Array[{:?}]", v),
+            Expr::Object(o) => write!(f, "Object{{{:#?}}}", o)
         }
     }
 }
